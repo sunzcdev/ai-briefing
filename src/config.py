@@ -32,14 +32,10 @@ QQ_SMTP_PORT = int(os.environ.get('QQ_SMTP_PORT', '465'))
 
 DEFAULT_TO_EMAIL = os.environ.get('AI_BRIEFING_TO', 'sunzcdev@gmail.com')
 
-# ── LLM 精选配置 ──────────────────────────────
-# 默认用硅基流动 Qwen2.5-32B（免费额度充足，精选任务够用）
-CURATOR_API_KEY = os.environ.get('CURATOR_API_KEY') or os.environ.get('SILICONFLOW_API_KEY', '')
-CURATOR_API_URL = os.environ.get(
-    'CURATOR_API_URL',
-    'https://api.siliconflow.cn/v1/chat/completions'
-)
-CURATOR_MODEL = os.environ.get('CURATOR_MODEL', 'Qwen/Qwen2.5-32B-Instruct')
+# ── LLM 精选配置（硅基流动 Qwen2.5-32B，免费额度够用） ──────────
+CURATOR_API_KEY = os.environ.get('CURATOR_API_KEY', '')
+CURATOR_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'
+CURATOR_MODEL = 'Qwen/Qwen2.5-32B-Instruct'
 
 # ── 运行模式 ──────────────────────────────────
 SKIP_INTERNALIZATION = os.environ.get(
