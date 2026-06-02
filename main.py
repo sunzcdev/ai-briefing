@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-AI 简报主入口 — 串联采集→HTML渲染→邮件发送
+AI 简报主入口 — 串联采集→清洗→HTML渲染→邮件发送
 用法: python3 main.py [daily|weekly|monthly]
 """
-import json, os, sys
+import json, os, re, sys
 from datetime import datetime
 
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -15,6 +15,61 @@ from src.storage.ai_briefing_storage import cmd_save
 from src.digest.send_ai_briefing import send
 from src.config import DATA_DIR, QQ_SMTP_PASS
 
+# ── 每期限量 ──────────────────────────────────
+MAX_ITEMS = {'daily': 10, 'weekly': 20, 'monthly': 30}
+
+
+def _clean_item(item):
+    """清洗单条 item 的描述文本"""
+    desc = (item.get('description') or '').strip()
+
+    # 去掉无意义描述
+    if not desc or len(desc) < 15:
+        item['description'] = ''
+        return item
+
+    # 检测冗余重复（同一句话出现 ≥3 次 → 取第一次）
+    # 按句号/逗号/分号分割，去重
+    parts = re.split(r'[。，；,;.]', desc)
+    parts = [p.strip() for p in parts if len(p.strip()) > 5]
+    unique = []
+    seen = set()
+    for p in parts:
+        key = p[:20]  # 前20字作为指纹
+        if key not in seen:
+            seen.add(key)
+            unique.append(p)
+
+    if len(unique) < len(parts):
+        # 有重复，重建描述
+        desc = '，'.join(unique)
+
+    # 截断过长描述（100字以内）
+    if len(desc) > 100:
+        desc = desc[:97] + '…'
+
+    item['description'] = desc
+    return item
+
+
+def _clean_items(items, mode):
+    """对 items 执行清洗 + 限数"""
+    # 1. 描述清洗
+    items = [_clean_item(it) for it in items]
+
+    # 2. 筛掉无简介的（description 为空或太短）
+    items = [it for it in items if len(it.get('description', '')) >= 15]
+
+    # 3. 按星数降序
+    items.sort(key=lambda x: x.get('stars', 0), reverse=True)
+
+    # 4. 截取上限
+    items = items[:MAX_ITEMS.get(mode, 20)]
+
+    return items
+
+
+# ── 卡片渲染 ──────────────────────────────────
 
 def _render_card(item):
     tag = item.get('tag', '')
@@ -71,6 +126,8 @@ def render_html(items, mode='weekly'):
     return html
 
 
+# ── 主流程 ─────────────────────────────────────
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else 'weekly'
     collectors = {'daily': collect_daily, 'weekly': collect_weekly, 'monthly': collect_monthly}
@@ -81,9 +138,7 @@ def main():
 
     raw = collectors[mode]()
     items = raw if isinstance(raw, list) else raw.get('items', [])
-    print(f'[ai-briefing] Collected {len(items)} items', flush=True)
-    if not items:
-        print('[ai-briefing] No items, skip.', flush=True); return
+    print(f'[ai-briefing] Raw: {len(items)} items', flush=True)
 
     # 粗略分类
     for item in items:
@@ -97,9 +152,17 @@ def main():
         else:
             item['tag'] = '开源项目'
 
-    if items:
-        items[0]['featured'] = True
+    # 清洗 + 限数
+    items = _clean_items(items, mode)
+    print(f'[ai-briefing] Cleaned: {len(items)} items', flush=True)
 
+    if not items:
+        print('[ai-briefing] No items after cleaning, skip.', flush=True)
+        return
+
+    items[0]['featured'] = True
+
+    # 渲染
     html = render_html(items, mode)
     html_path = os.path.join(DATA_DIR, f'{mode}_{datetime.now().strftime("%Y%m%d")}.html')
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -107,11 +170,13 @@ def main():
         f.write(html)
     print(f'[ai-briefing] HTML: {html_path}', flush=True)
 
+    # 存储
     try:
         cmd_save(datetime.now().strftime('%Y-%m-%d'), json.dumps(items, ensure_ascii=False))
     except Exception as e:
         print(f'[ai-briefing] Storage skip: {e}', flush=True)
 
+    # 发信
     if not QQ_SMTP_PASS:
         print('[ai-briefing] QQ_SMTP_PASS missing, email skip.', flush=True)
     else:
