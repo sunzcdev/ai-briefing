@@ -22,9 +22,7 @@ jobs:
     timeout-minutes: 15
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CURATOR_API_KEY: ${{ secrets.CURATOR_API_KEY }}
-      CURATOR_API_URL: ${{ secrets.CURATOR_API_URL }}
-      CURATOR_MODEL: ${{ secrets.CURATOR_MODEL }}
+      CURATOR_LLM: ${{ secrets.CURATOR_LLM }}
       QQ_SMTP_PASS: ${{ secrets.QQ_SMTP_PASS }}
       AI_BRIEFING_TO: ${{ secrets.AI_BRIEFING_TO || 'sunzcdev@gmail.com' }}
       AI_BRIEFING_SKIP_INTERNALIZATION: '1'

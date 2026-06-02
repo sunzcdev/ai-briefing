@@ -32,10 +32,13 @@ QQ_SMTP_PORT = int(os.environ.get('QQ_SMTP_PORT', '465'))
 
 DEFAULT_TO_EMAIL = os.environ.get('AI_BRIEFING_TO', 'sunzcdev@gmail.com')
 
-# ── LLM 精选配置（全从环境变量，公开仓库不留硬编码） ──────────
-CURATOR_API_KEY = os.environ.get('CURATOR_API_KEY', '')
-CURATOR_API_URL = os.environ.get('CURATOR_API_URL', '')
-CURATOR_MODEL = os.environ.get('CURATOR_MODEL', '')
+# ── LLM 精选配置（单 JSON 环境变量，防泄露公开仓库） ────
+import json
+_CURATOR_LLM_RAW = os.environ.get('CURATOR_LLM', '{}')
+_CURATOR_LLM_CFG = json.loads(_CURATOR_LLM_RAW) if _CURATOR_LLM_RAW.strip() else {}
+CURATOR_API_KEY = _CURATOR_LLM_CFG.get('api_key', '')
+CURATOR_API_URL = _CURATOR_LLM_CFG.get('api_url', '')
+CURATOR_MODEL = _CURATOR_LLM_CFG.get('model', '')
 
 # ── 运行模式 ──────────────────────────────────
 SKIP_INTERNALIZATION = os.environ.get(
