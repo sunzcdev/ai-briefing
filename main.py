@@ -16,10 +16,6 @@ from src.storage.ai_briefing_storage import cmd_save
 from src.digest.send_ai_briefing import send
 from src.config import DATA_DIR, QQ_SMTP_PASS
 
-# ── 每期限量 ──────────────────────────────────
-TARGET_PROJECTS = 7
-TARGET_NEWS = 3
-
 
 def _clean_item(item):
     """清洗单条 item 的描述文本"""
@@ -187,15 +183,14 @@ def main():
     for item in all_news:
         _clean_item(item)
 
-    # 筛掉无简介、star < 5k 的项目
+    # 筛掉无简介的项目
     all_candidates = [it for it in all_candidates
-                      if len(it.get('description', '')) >= 15
-                      and it.get('stars', 0) >= 5000]
+                      if len(it.get('description', '')) >= 15]
     all_candidates.sort(key=lambda x: x.get('stars', 0), reverse=True)
 
-    # 取候选 Top 30 给 LLM
-    candidates_pool = all_candidates[:30]
-    news_pool = all_news[:30]
+    # 取候选给 LLM
+    candidates_pool = all_candidates[:50]
+    news_pool = all_news[:50]
 
     print(f'[ai-briefing] Candidate pool: {len(candidates_pool)} projects, {len(news_pool)} news', flush=True)
 
@@ -207,13 +202,13 @@ def main():
         curated_names_p = {c['name'] for c in curated.get('projects', [])}
         curated_names_n = {c['name'] for c in curated.get('news', [])}
 
-        selected_projects = [it for it in candidates_pool if it['name'] in curated_names_p][:TARGET_PROJECTS]
-        selected_news = [it for it in news_pool if it['name'] in curated_names_n][:TARGET_NEWS]
+        selected_projects = [it for it in candidates_pool if it['name'] in curated_names_p]
+        selected_news = [it for it in news_pool if it['name'] in curated_names_n]
         print(f'[ai-briefing] LLM curated: {len(selected_projects)} projects, {len(selected_news)} news', flush=True)
     else:
         # Fallback: 按星数取
-        selected_projects = candidates_pool[:TARGET_PROJECTS]
-        selected_news = news_pool[:TARGET_NEWS]
+        selected_projects = candidates_pool[:10]
+        selected_news = news_pool[:5]
         curated = {'projects': [], 'news': []}
         print(f'[ai-briefing] Fallback (star ranking): {len(selected_projects)} projects, {len(selected_news)} news', flush=True)
 
