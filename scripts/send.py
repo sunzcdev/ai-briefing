@@ -53,7 +53,7 @@ def _card(item, comment):
         '<div style="background:#fff;border:1px solid #e8e8ed;border-radius:12px;'
         f'padding:14px 16px;margin-bottom:10px;">'
         f'<div style="font-size:15px;font-weight:600;color:#1d1d1f;">'
-        f'<a href="{item["url"]}" target="_blank" style="color:#1d1d1f;text-decoration:none;">'
+        f'<a href="{item.get("url", "#")}" target="_blank" style="color:#1d1d1f;text-decoration:none;">'
         f'{item["name"]}</a>{stars}</div>'
         f'<div style="font-size:14px;color:#515154;margin-top:4px;">{desc}</div>'
         f'{comment_html}</div>'
@@ -62,9 +62,9 @@ def _card(item, comment):
 # featured（第一个项目置顶）
 if projects:
     first = projects[0]
-    html = html.replace('##FEATURED_TITLE##', first['name'])
+    html = html.replace('##FEATURED_TITLE##', first.get('name', '暂无'))
     html = html.replace('##FEATURED_DESC##', first.get('comment', first.get('description', ''))[:200])
-    html = html.replace('##FEATURED_URL##', first['url'])
+    html = html.replace('##FEATURED_URL##', first.get('url', '#'))
     rest = projects[1:]
 else:
     html = html.replace('##FEATURED_TITLE##', '暂无')
@@ -91,7 +91,7 @@ if news:
             '<div style="background:#fff8f0;border:1px solid #ffe0b2;border-radius:12px;'
             f'padding:14px 16px;margin-bottom:10px;">'
             f'<div style="font-size:15px;font-weight:600;color:#1d1d1f;">'
-            f'<a href="{n["url"]}" target="_blank" style="color:#1d1d1f;text-decoration:none;">{n["name"]}</a></div>'
+            f'<a href="{n.get("url", "#")}" target="_blank" style="color:#1d1d1f;text-decoration:none;">{n["name"]}</a></div>'
             f'{comment_html}</div>'
         )
     # 在开源项目区块后面插入

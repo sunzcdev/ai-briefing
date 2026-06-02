@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LWF LLM 精选包装 — 读取 collect.json，调用 curate，输出 digest.json"""
+"""LWF LLM 精选包装 — 读取 collect.json，调用 curate，合并原始字段后输出 digest.json"""
 import sys, os, json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,8 +18,28 @@ projects = data.get('projects', [])
 news = data.get('news', [])
 mode = data.get('mode', 'daily')
 
+# 建立 name -> item 索引（保留原始 url/description/stars）
+project_index = {p['name']: p for p in projects if p.get('name')}
+news_index = {n['name']: n for n in news if n.get('name')}
+
 print(f"[lwf] LLM 精选: {len(projects)} 项目, {len(news)} 新闻", flush=True)
 curated = curate(projects, news, mode)
+
+def merge_originals(curated_list, index):
+    """合并 LLM 评论与原始字段"""
+    result = []
+    for item in (curated_list or []):
+        name = item.get('name', '')
+        orig = index.get(name, {})
+        merged = {
+            'name': name,
+            'comment': item.get('comment', ''),
+            'url': orig.get('url', '#'),
+            'description': orig.get('description', ''),
+            'stars': orig.get('stars', 0),
+        }
+        result.append(merged)
+    return result
 
 if curated:
     digest = {
@@ -27,8 +47,8 @@ if curated:
         "step_id": "digest",
         "timestamp": collect.get('timestamp'),
         "data": {
-            "projects": curated.get('projects', []),
-            "news": curated.get('news', []),
+            "projects": merge_originals(curated.get('projects', []), project_index),
+            "news": merge_originals(curated.get('news', []), news_index),
             "mode": mode
         },
         "meta": {"runner": "gha", "status": "success"}
