@@ -53,7 +53,7 @@ LWF_PROMPT
             "https://api.siliconflow.cn/v1/chat/completions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.LLM_KEY }}" \
-            -d "$(jq -n --arg p "$(cat /tmp/prompt.txt)" '{model:"Qwen/Qwen2.5-32B-Instruct",messages:[{role:"user",content:$p}]}')"
+            -d "$(jq -n --arg p "$(cat /tmp/prompt.txt)" '{"model":"Qwen/Qwen2.5-32B-Instruct","messages":[{"role":"user","content":$p}]}')"
 
       - name: store · store/git
         id: store
