@@ -57,6 +57,10 @@ def _tag_item(item):
     return item
 
 
+def _has_chinese(text):
+    return bool(re.search(r'[\u4e00-\u9fff]', text))
+
+
 def _render_card(item, comment=''):
     tag = item.get('tag', '')
     badge = (f'<span style="display:inline-block;font-size:10px;font-weight:600;color:#6e6e73;'
@@ -64,6 +68,10 @@ def _render_card(item, comment=''):
              f'vertical-align:middle;">{tag}</span>') if tag else ''
     stars = (f'<span style="font-size:12px;color:#8e8e93;margin-left:6px;">⭐ {item["stars"]}</span>'
              ) if item.get('stars') else ''
+    desc = item.get('description', '')
+    # 非中文描述不显示，用 LLM 点评替代
+    if desc and not _has_chinese(desc):
+        desc = ''
     comment_html = (f'<div style="font-size:13px;color:#007aff;margin-top:6px;font-weight:500;">'
                     f'💬 {comment}</div>') if comment else ''
     return (f'<div style="background:#fff;border:1px solid #e8e8ed;border-radius:12px;'
@@ -72,7 +80,7 @@ def _render_card(item, comment=''):
             f'{badge}<a href="{item["url"]}" target="_blank" style="color:#1d1d1f;text-decoration:none;">'
             f'{item["name"]}</a>{stars}</div>'
             f'<div style="font-size:14px;color:#515154;margin-top:4px;line-height:1.5;">'
-            f'{item.get("description", "")}</div>'
+            f'{desc}</div>'
             f'{comment_html}</div>')
 
 
@@ -179,8 +187,10 @@ def main():
     for item in all_news:
         _clean_item(item)
 
-    # 筛掉无简介的项目
-    all_candidates = [it for it in all_candidates if len(it.get('description', '')) >= 15]
+    # 筛掉无简介、star < 10k 的项目
+    all_candidates = [it for it in all_candidates
+                      if len(it.get('description', '')) >= 15
+                      and it.get('stars', 0) >= 10000]
     all_candidates.sort(key=lambda x: x.get('stars', 0), reverse=True)
 
     # 取候选 Top 30 给 LLM
