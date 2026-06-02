@@ -1,36 +1,43 @@
 # AI 新玩意简报系统
 
-代码采集 → LLM 润色 → Apple 风格 HTML → 邮件推送 → 二次内化闭环
+代码采集 → HTML 渲染 → 邮件推送
 
 ## 目录结构
 
 ```
 src/
-├── collector/        ← 代码采集（GitHub API + 免费源）
-├── storage/          ← 持久化存储 + 兴趣图谱
-├── digest/           ← 润色 + HTML 生成 + 邮件发送
-└── internalization/  ← 二次内化（用户标记→采集→分析→图谱）
-data/                 ← 运行时数据
-tests/                ← 测试
+├── config.py          ← 全局配置（环境变量注入）
+├── collector/         ← 数据采集（GitHub API + HN/Reddit/热榜）
+├── storage/           ← 持久化存储
+├── digest/            ← HTML 模板 + 邮件发送
+└── internalization/   ← 二次内化（本地运行，GHA 跳过）
+main.py                ← 主入口
+.github/workflows/     ← GHA 定时任务
 ```
 
-## 工作流
+## 使用
 
+```bash
+# 本地运行
+python3 main.py weekly
+
+# 环境变量
+export GITHUB_TOKEN=ghp_xxx
+export QQ_SMTP_PASS=xxx       # QQ邮箱SMTP授权码
+export AI_BRIEFING_TO=xxx     # 收件人（可选，默认 sunzcdev@gmail.com）
 ```
-cron (每天7:00)
-  → 判断模式（月报/周报/跳过）
-  → collector 采集
-  → LLM 精选+排版
-  → HTML 生成 + 邮件发送
-  → (新) 用户标记 → internalization 二次内化 → 优化下次精选
-```
 
-## 核心原则
+## GHA 定时
 
-- **代码干体力活，LLM 只做润色**
-- **只发周报（周一）和月报（1号）**，不发日报
-- 收件人：sunzcdev@gmail.com
+- **每周一 7:00** → 周报
+- **每月1号 7:00** → 月报
+- 手动触发：Actions → AI 简报 → workflow_dispatch
 
-## 历史脚本
+### 需配置的 Secrets
 
-原始脚本仍在 `~/.hermes/scripts/` 运行中，新功能直接在此项目开发。
+| Secret | 说明 |
+|--------|------|
+| `QQ_SMTP_PASS` | QQ邮箱SMTP授权码 |
+| `AI_BRIEFING_TO` | 收件人（可选） |
+
+`GITHUB_TOKEN` 由 Actions 自动提供。
