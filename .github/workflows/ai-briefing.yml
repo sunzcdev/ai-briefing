@@ -1,4 +1,4 @@
-name: AI 简报
+name: ai-briefing · LWF 子项目
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: '模式: daily/weekly/monthly'
+        description: '模式: daily / weekly / monthly'
         required: true
         default: 'weekly'
         type: choice
@@ -16,47 +16,78 @@ concurrency:
   group: ai-briefing
   cancel-in-progress: false
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  QQ_SMTP_PASS: ${{ secrets.QQ_SMTP_PASS }}
+  CURATOR_LLM: ${{ secrets.CURATOR_LLM }}
+  EMAIL_TO: ${{ secrets.EMAIL_TO || 'sunzcdev@gmail.com' }}
+
 jobs:
-  build:
+  run:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CURATOR_LLM: ${{ secrets.CURATOR_LLM }}
-      QQ_SMTP_PASS: ${{ secrets.QQ_SMTP_PASS }}
-      AI_BRIEFING_TO: ${{ secrets.AI_BRIEFING_TO || 'sunzcdev@gmail.com' }}
-      AI_BRIEFING_SKIP_INTERNALIZATION: '1'
-      AI_BRIEFING_DATA: ${{ github.workspace }}/data
-
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
+
       - run: pip install -r requirements.txt
 
-      - name: 确定模式（优先级 月报 > 周报 > 日报）
+      # ── Step 1: 模式判断 ──
+      - name: detect · 工作流模式
         id: mode
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
           else
-            DOM=$(date +%d)
-            DOW=$(date +%u)
-            if [[ "$DOM" == "01" ]]; then
-              echo "mode=monthly" >> $GITHUB_OUTPUT
-            elif [[ "$DOW" == "1" ]]; then
-              echo "mode=weekly" >> $GITHUB_OUTPUT
-            else
-              echo "mode=daily" >> $GITHUB_OUTPUT
-            fi
+            DOM=$(date +%d); DOW=$(date +%u)
+            if [[ "$DOM" == "01" ]]; then echo "mode=monthly"
+            elif [[ "$DOW" == "1" ]]; then echo "mode=weekly"
+            else echo "mode=daily"; fi | xargs -I{} echo "mode={}" >> $GITHUB_OUTPUT
           fi
 
-      - name: 运行采集 → LLM 精选 → 渲染 → 发信
-        run: python main.py ${{ steps.mode.outputs.mode }}
+      # ── Step 2: 采集（capability: collect） ──
+      - name: collect · 多源采集
+        run: python scripts/collect.py ${{ steps.mode.outputs.mode }}
 
+      # ── Step 3: LLM 精选（capability: process/llm） ──
+      - name: digest · LLM 精选
+        env:
+          CURATOR_LLM: ${{ secrets.CURATOR_LLM }}
+        run: python scripts/digest.py
+
+      # ── Step 4: 渲染发信（capability: process/script） ──
+      - name: send · 渲染 + 邮件推送
+        run: python scripts/send.py
+
+      # ── Step 5: 数据桥存储（capability: store/git） ──
+      - name: store · 推送到数据桥
+        if: github.ref == 'refs/heads/main'
+        env:
+          BRIDGE_TOKEN: ${{ secrets.BRIDGE_TOKEN || github.token }}
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          BRIDGE_DIR="bridge/ai-briefing/data/$DATE"
+          mkdir -p "$BRIDGE_DIR"
+          cp data/*.json "$BRIDGE_DIR/"
+          echo "{\"workflow\":\"ai-briefing\",\"run_id\":\"${{ github.run_id }}\",\"date\":\"$DATE\",\"mode\":\"${{ steps.mode.outputs.mode }}\",\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > "$BRIDGE_DIR/manifest.json"
+
+          # clone 数据桥仓库，写入后推送
+          git clone --depth 1 https://x-access-token:${BRIDGE_TOKEN}@github.com/sunzcdev/data-bridge.git /tmp/bridge
+          mkdir -p "/tmp/bridge/$BRIDGE_DIR"
+          cp "$BRIDGE_DIR/"* "/tmp/bridge/$BRIDGE_DIR/"
+          cd /tmp/bridge
+          git config user.name "lwf-bot"
+          git config user.email "lwf-bot@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || (git commit -m "ai-briefing $DATE" && git push)
+          echo "[lwf] 数据桥已更新: bridge/ai-briefing/data/$DATE"
+
+      # ── 产物归档 ──
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ai-briefing-${{ steps.mode.outputs.mode }}-${{ github.run_id }}
-          path: data/*.html
-          retention-days: 30
+          path: data/
+          retention-days: 3
