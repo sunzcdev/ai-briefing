@@ -2,7 +2,6 @@ name: AI 简报
 
 on:
   schedule:
-    # 每天早上 7:00 — 按优先级决定发月报/周报/日报
     - cron: '0 7 * * *'
   workflow_dispatch:
     inputs:
@@ -20,9 +19,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       QQ_SMTP_PASS: ${{ secrets.QQ_SMTP_PASS }}
       AI_BRIEFING_TO: ${{ secrets.AI_BRIEFING_TO || 'sunzcdev@gmail.com' }}
       AI_BRIEFING_SKIP_INTERNALIZATION: '1'
@@ -51,7 +51,7 @@ jobs:
             fi
           fi
 
-      - name: 运行
+      - name: 运行采集 → LLM 精选 → 渲染 → 发信
         run: python main.py ${{ steps.mode.outputs.mode }}
 
       - uses: actions/upload-artifact@v4

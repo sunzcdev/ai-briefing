@@ -28,13 +28,14 @@ def _get(url, timeout=12):
     return json.loads(urlopen(_req(url), timeout=timeout).read().decode())
 
 
-def _today():
-    return datetime.now().strftime('%Y-%m-%d')
+def _delay():
+    import time; time.sleep(1.5)
 
 
 # ===== GitHub 搜索 =====
 
 def github_search(query, per_page=15):
+    """GitHub API 搜索仓库"""
     q = quote(query)
     url = f'https://api.github.com/search/repositories?q={q}&sort=stars&order=desc&per_page={per_page}'
     try:
@@ -58,26 +59,56 @@ def github_search(query, per_page=15):
         return []
 
 
-def _delay():
-    import time; time.sleep(1.5)
+def github_trending(language='', since='daily'):
+    """GitHub Trending（爬取）"""
+    url = f'https://github.com/trending/{language}?since={since}'
+    try:
+        req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        html = urlopen(req, timeout=10).read().decode('utf-8')
+        items = []
+        for match in re.finditer(
+            r'<h2[^>]*class="h3[^"]*">\s*<a[^>]*href="/([^/]+)/([^"]+)"',
+            html
+        ):
+            owner, repo = match.group(1), match.group(2)
+            name = f'{owner}/{repo}'
+            items.append({
+                'type': 'github-trending',
+                'name': name,
+                'url': f'https://github.com/{name}',
+                'description': '',
+                'stars': 0,
+                'language': language or 'unknown',
+                'source': 'GitHub Trending'
+            })
+        return items[:10]
+    except Exception as e:
+        print(f'[warn] Trending failed: {e}', file=sys.stderr)
+        return []
 
 
 # ===== Hacker News =====
 
-def hn_search(max_items=15):
+def hn_search(max_items=20):
+    """Hacker News 最新热门（同时产出项目 & 新闻）"""
     try:
         ids = _get('https://hacker-news.firebaseio.com/v0/topstories.json')[:max_items]
         items = []
         for sid in ids:
             story = _get(f'https://hacker-news.firebaseio.com/v0/item/{sid}.json')
             if story and story.get('type') == 'story' and story.get('title'):
+                title = story['title'][:120]
+                url = story.get('url', f'https://news.ycombinator.com/item?id={sid}')
+                desc = (story.get('title', '') or '')[:200]
+                is_project = bool(re.search(r'github\.com|gitlab\.com|\.dev|\.app|release|开源', title, re.I))
                 items.append({
                     'type': 'hn',
-                    'name': story['title'][:120],
-                    'url': story.get('url', f'https://news.ycombinator.com/item?id={sid}'),
-                    'description': (story.get('title', '') or '')[:200],
+                    'name': title,
+                    'url': url,
+                    'description': desc,
                     'stars': story.get('score', 0),
-                    'source': 'Hacker News'
+                    'source': 'Hacker News',
+                    '_kind': 'project' if is_project else 'news'
                 })
         return items
     except Exception as e:
@@ -87,7 +118,7 @@ def hn_search(max_items=15):
 
 # ===== Reddit =====
 
-def reddit_search(subreddit, limit=10):
+def reddit_search(subreddit, limit=15):
     url = f'https://www.reddit.com/r/{subreddit}/hot.json?limit={limit}'
     try:
         req = Request(url, headers={'User-Agent': 'HermesBot/1.0'})
@@ -95,13 +126,16 @@ def reddit_search(subreddit, limit=10):
         items = []
         for post in data.get('data', {}).get('children', []):
             p = post['data']
+            title = p.get('title', '')[:120]
+            is_project = bool(re.search(r'github\.com|release|开源|项目|launch|announce', title, re.I))
             items.append({
                 'type': 'reddit',
-                'name': p.get('title', '')[:120],
+                'name': title,
                 'url': f"https://reddit.com{p.get('permalink', '')}",
                 'description': (p.get('selftext', '') or p.get('title', ''))[:200],
                 'stars': p.get('score', 0),
-                'source': f'r/{subreddit}'
+                'source': f'r/{subreddit}',
+                '_kind': 'project' if is_project else 'news'
             })
         return items
     except Exception as e:
@@ -129,107 +163,22 @@ def tophub_search():
                     'url': match.group(1),
                     'description': '',
                     'stars': int(match.group(3)),
-                    'source': '热榜'
+                    'source': '热榜',
+                    '_kind': 'news'
                 })
-        return items[:20]
+        return items[:15]
     except Exception as e:
         print(f'[warn] TopHub failed: {e}', file=sys.stderr)
         return []
 
 
-# ===== Twitter/X =====
-
-def twitter_search(query, max_results=10):
-    consumer_key = os.environ.get('TWITTER_CONSUMER_KEY', '')
-    if not consumer_key:
-        return []
-    from requests_oauthlib import OAuth1
-    import requests
-    auth = OAuth1(
-        consumer_key,
-        os.environ.get('TWITTER_CONSUMER_SECRET', ''),
-        os.environ.get('TWITTER_ACCESS_TOKEN', ''),
-        os.environ.get('TWITTER_ACCESS_SECRET', '')
-    )
-    q = quote(query)
-    url = f'https://api.twitter.com/2/tweets/search/recent?query={q}&max_results={max_results}&tweet.fields=public_metrics,created_at'
-    try:
-        resp = requests.get(url, auth=auth, timeout=10)
-        if resp.status_code != 200:
-            return []
-        items = []
-        for tweet in resp.json().get('data', []):
-            items.append({
-                'type': 'twitter', 'name': tweet.get('text', '')[:120],
-                'url': f"https://x.com/i/status/{tweet['id']}",
-                'description': tweet.get('text', '')[:200],
-                'stars': tweet.get('public_metrics', {}).get('like_count', 0),
-                'source': 'Twitter'
-            })
-        return items
-    except Exception as e:
-        return []
-
-
 # ===== 综合采集 =====
 
-def collect_standard(results):
-    results.extend(hn_search(10))
-    _delay()
-    results.extend(reddit_search('MachineLearning', 8))
-    _delay()
-    results.extend(reddit_search('LocalLLaMA', 8))
-    _delay()
-    results.extend(tophub_search())
-    return results
-
-
-def collect_daily():
-    yesterday = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
-    results = []
-    results.extend(github_search(
-        f'created:>{yesterday} stars:>5 (ai OR llm OR gpt OR agent OR "machine learning") sort:stars-desc',
-        per_page=25
-    ))
-    _delay()
-    results.extend(github_search(
-        f'created:>{yesterday} stars:>50 sort:stars-desc',
-        per_page=15
-    ))
-    _delay()
-    results.extend(twitter_search('AI open source project OR AI tool OR new LLM release', 8))
-    results = collect_standard(results)
-    return _dedup(results)
-
-
-def collect_weekly():
-    week_ago = (datetime.now() - timedelta(days=8)).strftime('%Y-%m-%d')
-    results = []
-    results.extend(github_search(
-        f'created:>{week_ago} stars:>20 (ai OR llm OR gpt OR agent OR "machine learning") sort:stars-desc',
-        per_page=25
-    ))
-    _delay()
-    results.extend(github_search(
-        f'created:>{week_ago} stars:>100 sort:stars-desc',
-        per_page=15
-    ))
-    results = collect_standard(results)
-    return _dedup(results)
-
-
-def collect_monthly():
-    month_ago = (datetime.now() - timedelta(days=32)).strftime('%Y-%m-%d')
-    results = []
-    results.extend(github_search(
-        f'created:>{month_ago} stars:>100 (ai OR llm OR gpt OR agent OR "machine learning") sort:stars-desc',
-        per_page=30
-    ))
-    results.extend(github_search(
-        f'created:>{month_ago} stars:>500 sort:stars-desc',
-        per_page=20
-    ))
-    return _dedup(results)
+def _tag_project_kind(items):
+    """统一标记 _kind（未标记的默认 project）"""
+    for it in items:
+        if '_kind' not in it:
+            it['_kind'] = 'project'
 
 
 def _dedup(items):
@@ -242,6 +191,75 @@ def _dedup(items):
     return unique
 
 
+def collect_projects(mode):
+    """采集候选项目（含中文 AI 项目 + GitHub Trending）"""
+    now = datetime.now()
+    if mode == 'daily':
+        since = (now - timedelta(days=2)).strftime('%Y-%m-%d')
+        gh_threshold = 5
+    elif mode == 'weekly':
+        since = (now - timedelta(days=8)).strftime('%Y-%m-%d')
+        gh_threshold = 20
+    else:  # monthly
+        since = (now - timedelta(days=32)).strftime('%Y-%m-%d')
+        gh_threshold = 100
+
+    results = []
+
+    # ★ 国际 AI/Agent 项目
+    results.extend(github_search(
+        f'created:>{since} stars:>{gh_threshold} (ai OR llm OR gpt OR agent OR "machine learning") sort:stars-desc',
+        per_page=20
+    ))
+    results.extend(github_search(
+        f'created:>{since} stars:>{gh_threshold * 3} sort:stars-desc',
+        per_page=10
+    ))
+
+    # ★ 中文 AI/Agent 项目
+    cn_queries = [
+        f'created:>{since} stars:>{gh_threshold} (大模型 OR 智能体 OR 人工智能 OR AI助手) language:Chinese sort:stars-desc',
+        f'created:>{since} stars:>{gh_threshold} (agent OR llm OR rag OR mcp) language:Chinese sort:stars-desc',
+    ]
+    for q in cn_queries:
+        _delay()
+        results.extend(github_search(q, per_page=15))
+
+    # ★ GitHub Trending
+    _delay()
+    results.extend(github_trending('python', 'daily' if mode == 'daily' else 'weekly'))
+
+    return results
+
+
+def collect_news(mode):
+    """采集热点事件"""
+    results = []
+
+    # HN + Reddit
+    results.extend(hn_search(15))
+    _delay()
+    results.extend(reddit_search('MachineLearning', 10))
+    _delay()
+    results.extend(reddit_search('LocalLLaMA', 10))
+
+    # TopHub 中文热榜
+    results.extend(tophub_search())
+
+    # GitHub Trending（也产出新闻类）
+    _delay()
+    results.extend(github_trending('', 'daily' if mode == 'daily' else 'weekly'))
+
+    # 标记 AI 相关
+    for it in results:
+        nd = (it.get('name', '') + ' ' + it.get('description', '')).lower()
+        is_ai = any(k in nd for k in ['ai', 'llm', 'gpt', 'agent', '大模型', '智能', '人工智能', 'machine learning', 'openai'])
+        if not is_ai:
+            it['_kind'] = 'noise'
+
+    return results
+
+
 def read_tracker():
     try:
         with open(TRACKER_PATH) as f:
@@ -252,9 +270,11 @@ def read_tracker():
 
 if __name__ == '__main__':
     mode = sys.argv[1] if len(sys.argv) > 1 else 'daily'
-    funcs = {'daily': collect_daily, 'weekly': collect_weekly, 'monthly': collect_monthly}
-    if mode not in funcs:
-        print(f'Usage: {sys.argv[0]} [daily|weekly|monthly]', file=sys.stderr)
-        sys.exit(1)
-    data = funcs[mode]()
-    print(json.dumps({'items': data, 'tracked': read_tracker(), 'mode': mode}, ensure_ascii=False, indent=2))
+    projects = collect_projects(mode)
+    news = collect_news(mode)
+    all_items = _dedup(projects + [n for n in news if n.get('_kind') != 'noise'])
+    print(json.dumps({
+        'items': all_items,
+        'tracked': read_tracker(),
+        'mode': mode
+    }, ensure_ascii=False, indent=2))
