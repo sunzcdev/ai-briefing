@@ -187,10 +187,10 @@ def main():
     for item in all_news:
         _clean_item(item)
 
-    # 筛掉无简介、star < 10k 的项目
+    # 筛掉无简介、star < 5k 的项目
     all_candidates = [it for it in all_candidates
                       if len(it.get('description', '')) >= 15
-                      and it.get('stars', 0) >= 10000]
+                      and it.get('stars', 0) >= 5000]
     all_candidates.sort(key=lambda x: x.get('stars', 0), reverse=True)
 
     # 取候选 Top 30 给 LLM
