@@ -2,8 +2,8 @@ name: AI 简报
 
 on:
   schedule:
-    - cron: '0 7 * * 1'    # 周一 7:00 周报
-    - cron: '0 7 1 * *'    # 1号 7:00 月报
+    # 每天早上 7:00 — 按优先级决定发月报/周报/日报
+    - cron: '0 7 * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -34,18 +34,24 @@ jobs:
         with: { python-version: '3.11' }
       - run: pip install -r requirements.txt
 
-      - name: 确定模式
+      - name: 确定模式（优先级 月报 > 周报 > 日报）
         id: mode
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
           else
             DOM=$(date +%d)
-            [[ "$DOM" == "01" ]] && echo "mode=monthly" >> $GITHUB_OUTPUT || echo "mode=weekly" >> $GITHUB_OUTPUT
+            DOW=$(date +%u)
+            if [[ "$DOM" == "01" ]]; then
+              echo "mode=monthly" >> $GITHUB_OUTPUT
+            elif [[ "$DOW" == "1" ]]; then
+              echo "mode=weekly" >> $GITHUB_OUTPUT
+            else
+              echo "mode=daily" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: 运行
-        if: steps.mode.outputs.mode != 'skip'
         run: python main.py ${{ steps.mode.outputs.mode }}
 
       - uses: actions/upload-artifact@v4
