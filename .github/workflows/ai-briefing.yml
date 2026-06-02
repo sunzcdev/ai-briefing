@@ -1,0 +1,56 @@
+name: AI 简报
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'    # 周一 7:00 周报
+    - cron: '0 7 1 * *'    # 1号 7:00 月报
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '模式: daily/weekly/monthly'
+        required: true
+        default: 'weekly'
+        type: choice
+        options: [daily, weekly, monthly]
+
+concurrency:
+  group: ai-briefing
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      QQ_SMTP_PASS: ${{ secrets.QQ_SMTP_PASS }}
+      AI_BRIEFING_TO: ${{ secrets.AI_BRIEFING_TO || 'sunzcdev@gmail.com' }}
+      AI_BRIEFING_SKIP_INTERNALIZATION: '1'
+      AI_BRIEFING_DATA: ${{ github.workspace }}/data
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+
+      - name: 确定模式
+        id: mode
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
+          else
+            DOM=$(date +%d)
+            [[ "$DOM" == "01" ]] && echo "mode=monthly" >> $GITHUB_OUTPUT || echo "mode=weekly" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 运行
+        if: steps.mode.outputs.mode != 'skip'
+        run: python main.py ${{ steps.mode.outputs.mode }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-briefing-${{ steps.mode.outputs.mode }}-${{ github.run_id }}
+          path: data/*.html
+          retention-days: 30

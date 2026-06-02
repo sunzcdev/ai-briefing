@@ -1,31 +1,17 @@
 #!/usr/bin/env python3
 """
 AI 简报持久化存储模块
-管理日报数据的持久化存储和读取，供周报/月报提炼使用。
-数据存储在 ~/.hermes/data/ai_briefing/（不是 cache，不会清理）
-
-用法：
-  # 保存日报精选
-  python3 ai_briefing_storage.py save 2026-05-19 '[
-    {"name":"项目名","url":"...","description":"...","reason":"精选理由","tag":"开源项目","stars":123},
-    ...
-  ]'
-
-  # 读取最近 N 天的日报数据
-  python3 ai_briefing_storage.py read 7
-
-  # 追加用户反馈
-  python3 ai_briefing_storage.py feedback '{"source":"email","content":"这个项目不错","date":"2026-05-19"}'
-
-  # 读取所有用户反馈
-  python3 ai_briefing_storage.py read-feedback
+用法见 __doc__ 或 python3 src/storage/ai_briefing_storage.py
 """
-import json
-import os
-import sys
+import json, os, sys
 from datetime import datetime, timedelta
 
-DATA_DIR = os.path.expanduser('~/.hermes/data/ai_briefing')
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from src.config import DATA_DIR
+
 INDEX_FILE = os.path.join(DATA_DIR, 'index.json')
 FEEDBACK_FILE = os.path.join(DATA_DIR, 'feedback.jsonl')
 
@@ -49,21 +35,13 @@ def _save_index(index):
 
 
 def cmd_save(date_str, items_json):
-    """保存某一日的日报精选到 data 目录"""
     _ensure_dir()
     items = json.loads(items_json)
     file_path = os.path.join(DATA_DIR, f'daily_{date_str}.json')
-    data = {
-        "date": date_str,
-        "items": items,
-        "saved_at": datetime.now().isoformat()
-    }
+    data = {"date": date_str, "items": items, "saved_at": datetime.now().isoformat()}
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-
-    # 更新索引
     index = _load_index()
-    # 替换或追加
     existing = [e for e in index['daily_files'] if e['date'] != date_str]
     existing.append({"date": date_str, "file": f'daily_{date_str}.json'})
     index['daily_files'] = sorted(existing, key=lambda x: x['date'])
@@ -72,77 +50,51 @@ def cmd_save(date_str, items_json):
 
 
 def cmd_read(days):
-    """读取最近 N 天的日报数据"""
     _ensure_dir()
-    index = _load_index()
     cutoff = (datetime.now() - timedelta(days=int(days))).strftime('%Y-%m-%d')
-
     result = []
-    for entry in index['daily_files']:
+    for entry in _load_index()['daily_files']:
         if entry['date'] >= cutoff:
-            file_path = os.path.join(DATA_DIR, entry['file'])
-            if os.path.exists(file_path):
-                with open(file_path, encoding='utf-8') as f:
-                    data = json.load(f)
-                    result.append(data)
-
+            fp = os.path.join(DATA_DIR, entry['file'])
+            if os.path.exists(fp):
+                with open(fp, encoding='utf-8') as f:
+                    result.append(json.load(f))
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def cmd_feedback(feedback_json):
-    """追加用户反馈"""
     _ensure_dir()
     entry = json.loads(feedback_json)
-    if 'date' not in entry:
-        entry['date'] = datetime.now().strftime('%Y-%m-%d')
-    if 'timestamp' not in entry:
-        entry['timestamp'] = datetime.now().isoformat()
+    entry.setdefault('date', datetime.now().strftime('%Y-%m-%d'))
+    entry.setdefault('timestamp', datetime.now().isoformat())
     with open(FEEDBACK_FILE, 'a', encoding='utf-8') as f:
         f.write(json.dumps(entry, ensure_ascii=False) + '\n')
     print("OK: feedback saved")
 
 
 def cmd_read_feedback():
-    """读取所有用户反馈"""
     _ensure_dir()
     if not os.path.exists(FEEDBACK_FILE):
-        print("[]")
-        return
-    entries = []
-    with open(FEEDBACK_FILE, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                entries.append(json.loads(line))
+        print("[]"); return
+    entries = [json.loads(line) for line in open(FEEDBACK_FILE, encoding='utf-8') if line.strip()]
     print(json.dumps(entries, ensure_ascii=False, indent=2))
 
 
 def cmd_list():
-    """列出所有已保存的日报日期"""
-    index = _load_index()
-    dates = [e['date'] for e in index['daily_files']]
-    print(f"Total daily entries: {len(dates)}")
+    dates = [e['date'] for e in _load_index()['daily_files']]
+    print(f"Total: {len(dates)}")
     for d in dates[-30:]:
         print(f"  {d}")
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print(__doc__)
-        sys.exit(1)
-
-    cmd = sys.argv[1]
-    if cmd == 'save' and len(sys.argv) >= 4:
-        cmd_save(sys.argv[2], sys.argv[3])
-    elif cmd == 'read' and len(sys.argv) >= 3:
-        cmd_read(sys.argv[2])
-    elif cmd == 'feedback' and len(sys.argv) >= 3:
-        cmd_feedback(sys.argv[2])
-    elif cmd == 'read-feedback':
-        cmd_read_feedback()
-    elif cmd == 'list':
-        cmd_list()
-    else:
-        print(f"Unknown command or missing args: {cmd}")
-        print(__doc__)
-        sys.exit(1)
+        print(__doc__); sys.exit(1)
+    cmds = {
+        'save': lambda: cmd_save(sys.argv[2], sys.argv[3]) if len(sys.argv) >= 4 else print(__doc__),
+        'read': lambda: cmd_read(sys.argv[2]) if len(sys.argv) >= 3 else print(__doc__),
+        'feedback': lambda: cmd_feedback(sys.argv[2]) if len(sys.argv) >= 3 else print(__doc__),
+        'read-feedback': cmd_read_feedback,
+        'list': cmd_list,
+    }
+    sys.argv[1] in cmds and cmds[sys.argv[1]]() or print(f"Unknown: {sys.argv[1]}")
