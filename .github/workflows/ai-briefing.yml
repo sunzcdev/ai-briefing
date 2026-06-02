@@ -1,93 +1,80 @@
-name: ai-briefing · LWF 子项目
+name: ai-briefing
 
 on:
   schedule:
-    - cron: '0 7 * * *'
+    - cron: '0 23 * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: '模式: daily / weekly / monthly'
+        description: '模式: daily/weekly/monthly'
         required: true
         default: 'weekly'
         type: choice
         options: [daily, weekly, monthly]
 
-concurrency:
-  group: ai-briefing
-  cancel-in-progress: false
-
-env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  QQ_SMTP_PASS: ${{ secrets.QQ_SMTP_PASS }}
-  CURATOR_LLM: ${{ secrets.CURATOR_LLM }}
-  EMAIL_TO: ${{ secrets.EMAIL_TO || 'sunzcdev@gmail.com' }}
-
 jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.BRIDGE_REPO || github.repository }}
+          token: ${{ secrets.BRIDGE_TOKEN || github.token }}
 
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
+        with:
+          python-version: '3.11'
 
-      - run: pip install -r requirements.txt
+      - run: mkdir -p data
 
-      # ── Step 1: 模式判断 ──
-      - name: detect · 工作流模式
-        id: mode
+      - name: detect · detect/script
+        id: detect
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
-          else
-            DOM=$(date +%d); DOW=$(date +%u)
-            if [[ "$DOM" == "01" ]]; then echo "mode=monthly"
-            elif [[ "$DOW" == "1" ]]; then echo "mode=weekly"
-            else echo "mode=daily"; fi | xargs -I{} echo "mode={}" >> $GITHUB_OUTPUT
-          fi
+          bash scripts/detect-mode.sh
 
-      # ── Step 2: 采集（capability: collect） ──
-      - name: collect · 多源采集
-        run: python scripts/collect.py ${{ steps.mode.outputs.mode }}
-
-      # ── Step 3: LLM 精选（capability: process/llm） ──
-      - name: digest · LLM 精选
+      - name: collect · collect/script
+        id: collect
         env:
-          CURATOR_LLM: ${{ secrets.CURATOR_LLM }}
-        run: python scripts/digest.py
-
-      # ── Step 4: 渲染发信（capability: process/script） ──
-      - name: send · 渲染 + 邮件推送
-        run: python scripts/send.py
-
-      # ── Step 5: 数据桥存储（capability: store/git） ──
-      - name: store · 推送到数据桥
-        if: github.ref == 'refs/heads/main'
-        env:
-          BRIDGE_TOKEN: ${{ secrets.BRIDGE_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          DATE=$(date +%Y-%m-%d)
-          BRIDGE_DIR="bridge/ai-briefing/data/$DATE"
-          mkdir -p "$BRIDGE_DIR"
-          cp data/*.json "$BRIDGE_DIR/"
-          echo "{\"workflow\":\"ai-briefing\",\"run_id\":\"${{ github.run_id }}\",\"date\":\"$DATE\",\"mode\":\"${{ steps.mode.outputs.mode }}\",\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > "$BRIDGE_DIR/manifest.json"
+          pip install -r requirements.txt 2>/dev/null || true
+          python3 scripts/collect.py ${{ steps.detect.outputs.mode }}
 
-          # clone 数据桥仓库，写入后推送
-          git clone --depth 1 https://x-access-token:${BRIDGE_TOKEN}@github.com/sunzcdev/data-bridge.git /tmp/bridge
-          mkdir -p "/tmp/bridge/$BRIDGE_DIR"
-          cp "$BRIDGE_DIR/"* "/tmp/bridge/$BRIDGE_DIR/"
-          cd /tmp/bridge
+      - name: digest · process/llm
+        id: digest
+        run: |
+          mkdir -p ${{ github.workspace }}/data
+          cat > /tmp/prompt.txt << 'LWF_PROMPT'
+你是 AI 领域资深编辑。从候选项目中挑出 7 个最值得关注的优质项目，从候选新闻中挑出 3 个最重要热点，每项用一句话中文点评。
+LWF_PROMPT
+          curl -s -o "${{ github.workspace }}/data/digest.json" \
+            "https://api.siliconflow.cn/v1/chat/completions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.LLM_KEY }}" \
+            -d "$(jq -n --arg p "$(cat /tmp/prompt.txt)" '{model:"Qwen/Qwen2.5-32B-Instruct",messages:[{role:"user",content:$p}]}')"
+
+      - name: store · store/git
+        id: store
+        run: |
           git config user.name "lwf-bot"
           git config user.email "lwf-bot@users.noreply.github.com"
           git add -A
-          git diff --cached --quiet || (git commit -m "ai-briefing $DATE" && git push)
-          echo "[lwf] 数据桥已更新: bridge/ai-briefing/data/$DATE"
+          git diff --cached --quiet || (git commit -m "ai-briefing update" && git push)
 
-      # ── 产物归档 ──
+      - name: send · process/script
+        id: send
+        env:
+          QQ_SMTP_PASS: ${{ secrets.QQ_SMTP_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: |
+          pip install -r requirements.txt 2>/dev/null || true
+          python3 scripts/send.py 
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ai-briefing-${{ steps.mode.outputs.mode }}-${{ github.run_id }}
+          name: ai-briefing-${{ github.run_id }}
           path: data/
           retention-days: 3
