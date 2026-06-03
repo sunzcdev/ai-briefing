@@ -13,7 +13,7 @@ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from src.config import QQ_EMAIL, QQ_SMTP_PASS, QQ_SMTP_HOST, QQ_SMTP_PORT, DEFAULT_TO_EMAIL
+from src.config import EMAIL_FROM, EMAIL_PASS, SMTP_HOST, SMTP_PORT, DEFAULT_TO_EMAIL
 
 
 def html_to_plain_text(html):
@@ -29,19 +29,19 @@ def html_to_plain_text(html):
 
 def send(html_content, subject, to_email=DEFAULT_TO_EMAIL):
     msg = MIMEMultipart('alternative')
-    msg['From'] = QQ_EMAIL
+    msg['From'] = EMAIL_FROM
     msg['To'] = to_email
     msg['Subject'] = Header(subject, 'utf-8')
     msg.attach(MIMEText(html_to_plain_text(html_content), 'plain', 'utf-8'))
     msg.attach(MIMEText(html_content, 'html', 'utf-8'))
-    with smtplib.SMTP_SSL(QQ_SMTP_HOST, QQ_SMTP_PORT) as s:
-        s.login(QQ_EMAIL, QQ_SMTP_PASS)
-        s.sendmail(QQ_EMAIL, [to_email], msg.as_string())
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as s:
+        s.login(EMAIL_FROM, EMAIL_PASS)
+        s.sendmail(EMAIL_FROM, [to_email], msg.as_string())
     print('OK')
 
 
 if __name__ == '__main__':
-    if not QQ_SMTP_PASS:
+    if not EMAIL_PASS:
         print('[error] QQ_SMTP_PASS not set.', file=sys.stderr); sys.exit(1)
     send(html=sys.stdin.read(), subject=sys.argv[1] if len(sys.argv) > 1 else 'AI/IT 行业早报',
          to_email=sys.argv[2] if len(sys.argv) > 2 else DEFAULT_TO_EMAIL)

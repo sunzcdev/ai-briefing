@@ -37,8 +37,8 @@ jobs:
           LLM_KEY: ${{ secrets.LLM_KEY }}
           AI_BRIEFING_DATA: ${{ github.workspace }}/data
           AI_BRIEFING_TO: ${{ secrets.AI_BRIEFING_TO || 'sunzcdev@gmail.com' }}
-          QQ_EMAIL: zhenchao@qq.com
-          QQ_SMTP_PASS: ${{ secrets.QQ_SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM || 'zhenchao@qq.com' }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: |
           MODE="${{ inputs.mode || 'daily' }}"
           pip install -r requirements.txt -q 2>/dev/null || true

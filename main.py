@@ -14,7 +14,7 @@ from src.collector.ai_briefing_collector import collect_projects, collect_news, 
 from src.curator import curate
 from src.storage.ai_briefing_storage import cmd_save
 from src.digest.send_ai_briefing import send
-from src.config import DATA_DIR, QQ_SMTP_PASS
+from src.config import DATA_DIR, EMAIL_PASS
 
 
 def _clean_item(item):
@@ -235,8 +235,8 @@ def main():
         print(f'[ai-briefing] Storage skip: {e}', flush=True)
 
     # 7. 发信
-    if not QQ_SMTP_PASS:
-        print('[ai-briefing] QQ_SMTP_PASS missing, email skip.', flush=True)
+    if not EMAIL_PASS:
+        print('[ai-briefing] EMAIL_PASS missing, email skip.', flush=True)
     else:
         labels = {'daily': '日报', 'weekly': '周报', 'monthly': '月报'}
         subject = f'AI 新玩意{labels.get(mode, mode)} {datetime.now().strftime("%Y-%m-%d")}'

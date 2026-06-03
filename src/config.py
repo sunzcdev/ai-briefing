@@ -24,11 +24,11 @@ TRACKER_PATH = os.environ.get(
 # ── API 凭据 ──────────────────────────────────
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
 
-# QQ 邮箱 SMTP
-QQ_EMAIL = os.environ.get('QQ_EMAIL', 'james.sun@qq.com')
-QQ_SMTP_PASS = os.environ.get('QQ_SMTP_PASS', '')
-QQ_SMTP_HOST = os.environ.get('QQ_SMTP_HOST', 'smtp.qq.com')
-QQ_SMTP_PORT = int(os.environ.get('QQ_SMTP_PORT', '465'))
+# ── 邮件 SMTP ──────────────────────────────────
+EMAIL_FROM = os.environ.get('EMAIL_FROM', 'zhenchao@qq.com')
+EMAIL_PASS = os.environ.get('EMAIL_PASS', '')
+SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.qq.com')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '465'))
 
 DEFAULT_TO_EMAIL = os.environ.get('AI_BRIEFING_TO', 'sunzcdev@gmail.com')
 
