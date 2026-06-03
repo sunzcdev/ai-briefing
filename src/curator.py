@@ -13,7 +13,7 @@ if _PROJECT_ROOT not in sys.path:
 from src.config import CURATOR_API_KEY, CURATOR_API_URL, CURATOR_MODEL
 
 
-def _call_llm(prompt, max_tokens=2000):
+def _call_llm(prompt, max_tokens=4000):
     if not CURATOR_API_KEY:
         print('[curator] API key not set, skip LLM curation.', file=sys.stderr)
         return None
@@ -64,17 +64,17 @@ def _build_prompt(projects, news, mode):
 从【候选项目】中挑出 **7 个最值得关注的优质项目**（优先 AI/Agent 领域，兼顾国内外、中文项目）。
 从【候选新闻】中挑出 **3 个最重要的人工智能热点事件或资讯**。
 
-每个项目/事件用一行中文点评（10-25 字），点出核心价值或亮点。
+每个项目/事件写一段中文点评（80-150 字），说明为什么值得关注、解决了什么问题、有什么亮点。点评要具体，不要空洞的好评。
 
 ## 输出格式
 严格 JSON 格式，不要多余文字：
 {{
   "projects": [
-    {{"name": "完整项目名", "comment": "一句话中文点评"}},
+  {"name": "完整项目名", "comment": "一段中文点评，80-150字，说明核心价值和亮点"},
     ...
   ],
   "news": [
-    {{"name": "标题", "comment": "一句话中文点评"}},
+  {"name": "完整项目名", "comment": "一段中文点评，80-150字，说明核心价值和亮点"},
     ...
   ]
 }}"""
