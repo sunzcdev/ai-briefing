@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 LLM 精选 + 点评模块
-用硅基流动 Qwen2.5-32B（免费）从候选项目中挑出 7 优质项目 + 3 热点事件。
+用 GitHub Models (gpt-4o-mini) 从候选项目中挑出 7 优质项目 + 3 热点事件。
 """
 import json, os, sys
 from datetime import datetime
