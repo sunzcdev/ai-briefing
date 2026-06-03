@@ -78,4 +78,8 @@ jobs:
         continue-on-error: true
         run: |
           pip install -q -r requirements.txt 2>/dev/null || true
-          python3 scripts/send.py
+          for i in 1 2 3; do
+            python3 scripts/send.py && break
+            echo "[lwf] 发信失败 (attempt $i), 等待 10s 后重试..." >&2
+            sleep 10
+          done
