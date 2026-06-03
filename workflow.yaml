@@ -1,0 +1,35 @@
+name: ai-brief
+trigger:
+  schedule: "0 23 * * *"           # 北京 07:00
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "模式: daily/weekly/monthly"
+        default: "daily"
+        type: choice
+        options: [daily, weekly, monthly]
+
+steps:
+  # ═══ GHA 管道（全干模式） ═══
+  - id: collect-process
+    runner: gha
+    capability: process
+    using: script
+    config:
+      file: main.py
+      args: ${{ inputs.mode || 'daily' }}
+
+  - id: sync
+    runner: gha
+    depends: [collect-process]
+    capability: store
+    using: rclone
+    config:
+      remote: "jianguoyun"
+      type: "webdav"
+      url: "https://dav.jianguoyun.com/dav/"
+      vendor: "other"
+      user_secret: "RCLONE_USER"
+      pass_secret: "RCLONE_PASS"
+      source: "data/"
+      target: "notebook/学/AI简报/"
