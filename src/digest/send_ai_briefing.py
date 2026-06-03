@@ -35,7 +35,8 @@ def send(html_content, subject, to_email=DEFAULT_TO_EMAIL):
     msg['Subject'] = Header(subject, 'utf-8')
     msg.attach(MIMEText(html_to_plain_text(html_content), 'plain', 'utf-8'))
     msg.attach(MIMEText(html_content, 'html', 'utf-8'))
-    with smtplib.SMTP_SSL(QQ_SMTP_HOST, QQ_SMTP_PORT) as s:
+    with smtplib.SMTP(QQ_SMTP_HOST, QQ_SMTP_PORT) as s:
+        s.starttls()
         s.login(QQ_EMAIL, QQ_SMTP_PASS)
         s.sendmail(QQ_EMAIL, [to_email], msg.as_string())
     print('OK')

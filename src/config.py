@@ -30,8 +30,8 @@ EMAIL_PASS = os.environ.get('EMAIL_PASS') or os.environ.get('QQ_SMTP_PASS', '')
 EMAIL_TO = os.environ.get('EMAIL_TO') or os.environ.get('AI_BRIEFING_TO', 'james.sun@qq.com')
 
 # SMTP 连接参数
-QQ_SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.qq.com')
-QQ_SMTP_PORT = int(os.environ.get('SMTP_PORT', '465'))
+QQ_SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+QQ_SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
 
 # ── LLM 精选配置 ──────────────────────────────
 # 优先用 LLM_KEY（LWF 环境变量对齐），兼容旧 CURATOR_LLM JSON
