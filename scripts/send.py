@@ -14,9 +14,9 @@ with open(digest_path) as f:
     digest = json.load(f)
 
 from src.digest.send_ai_briefing import send
-from src.config import DEFAULT_TO_EMAIL
+from src.config import EMAIL_TO
 
-to_email = os.environ.get('EMAIL_TO', DEFAULT_TO_EMAIL)
+to_email = EMAIL_TO
 now = datetime.now()
 weekdays = ['一', '二', '三', '四', '五', '六', '日']
 subject = f"AI 新玩意简报 {now.strftime('%Y-%m-%d')}"

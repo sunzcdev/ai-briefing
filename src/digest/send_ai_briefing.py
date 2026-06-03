@@ -13,7 +13,8 @@ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from src.config import QQ_EMAIL, QQ_SMTP_PASS, QQ_SMTP_HOST, QQ_SMTP_PORT, DEFAULT_TO_EMAIL
+from src.config import EMAIL_FROM as QQ_EMAIL, EMAIL_PASS as QQ_SMTP_PASS
+from src.config import QQ_SMTP_HOST, QQ_SMTP_PORT, EMAIL_TO as DEFAULT_TO_EMAIL
 
 
 def html_to_plain_text(html):

@@ -1,44 +1,62 @@
-# LWF 工作流定义 — ai-briefing
-# 采集 → LLM 精选 → Git 桥存储 → 邮件推送
 name: ai-briefing
 trigger:
-  schedule: "0 7 * * *"        # 每天 UTC 7:00（北京时间 15:00）
-
-bridge:
-  repo: sunzcdev/data-bridge
-  path: ai-briefing/
+  schedule: "0 23 * * *"        # UTC 23:00 = 北京 07:00
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "模式: daily/weekly/monthly"
+        default: "daily"
 
 steps:
-  # ── 第一步：采集 ──
+  # ── 第一步：检测模式 ──
+  - id: detect
+    runner: gha
+    capability: detect
+    using: script
+    config:
+      file: scripts/detect-mode.sh
+
+  # ── 第二步：采集 ──
   - id: collect
     runner: gha
+    depends: [detect]
     capability: collect
     using: script
     config:
       file: scripts/collect.py
 
-  # ── 第二步：LLM 精选 ──
+  # ── 第三步：LLM 精选 ──
   - id: digest
     runner: gha
     depends: [collect]
     capability: process
-    using: llm
+    using: script
     config:
-      model: "Qwen/Qwen2.5-32B-Instruct"
-      api_url: "https://api.siliconflow.cn/v1/chat/completions"
+      file: scripts/digest.py
 
-  # ── 第三步：存入数据桥 ──
-  - id: store
+  # ── 第四步：同步到坚果云 ──
+  - id: sync
     runner: gha
     depends: [digest]
     capability: store
-    using: git
+    using: rclone
+    config:
+      remote: "jianguoyun"
+      type: "webdav"
+      url: "https://dav.jianguoyun.com/dav/"
+      vendor: "other"
+      user_secret: "RCLONE_USER"
+      pass_secret: "RCLONE_PASS"
+      source: "data/"
+      target: "notebook/学/AI简报/"
 
-  # ── 第四步：渲染发信 ──
-  - id: send
+  # ── 第五步：邮件通知 ──
+  - id: notify
     runner: gha
     depends: [digest]
-    capability: process
-    using: script
+    optional: true
+    capability: notify
+    using: email
     config:
-      file: scripts/send.py
+      to: "james.sun@qq.com"
+      subject: "✅ AI 简报"
