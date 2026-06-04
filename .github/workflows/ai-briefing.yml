@@ -2,7 +2,7 @@ name: ai-briefing
 
 on:
   schedule:
-    - cron: '0 23 * * *'
+    - cron: '0 23 * * *'     # 北京 07:00
   workflow_dispatch:
     inputs:
       mode:
@@ -12,11 +12,17 @@ on:
         type: choice
         options: [daily, weekly, monthly]
 
+permissions:
+  contents: read
+  actions: write
+
 env:
   EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
   EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
   EMAIL_TO: ${{ secrets.EMAIL_TO }}
   LLM_KEY: ${{ secrets.LLM_KEY }}
+  ANYSEARCH_API_KEY: ${{ secrets.ANYSEARCH_API_KEY }}
+  AI_BRIEFING_DATA: ${{ github.workspace }}/data
 
 jobs:
   run:
@@ -25,35 +31,21 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - run: mkdir -p data
 
-      # ═══ 第一步：采集 ═══
-      - name: collect · collect/script
-        id: collect
-        env:
-          MODE: ${{ inputs.mode || 'daily' }}
-          ANYSEARCH_API_KEY: ${{ secrets.ANYSEARCH_API_KEY }}
+      # ═══ 一键采集 → 精选 → 邮件 ═══
+      - name: collect-and-digest
         run: |
           pip install -q -r requirements.txt 2>/dev/null || true
-          python3 scripts/collect.py "$MODE"
+          MODE="${{ inputs.mode || 'daily' }}"
+          python3 main.py "$MODE"
 
-      # ═══ 第二步：LLM 精选 ═══
-      - name: digest · process/script
-        id: digest
-        env:
-          SYSTEM_PROMPT: ${{ vars.SYSTEM_PROMPT }}
-        run: |
-          pip install -q -r requirements.txt 2>/dev/null || true
-          python3 scripts/digest.py
-
-      # ═══ 第三步：同步坚果云 ═══
-      - name: sync · store/rclone
-        id: sync
+      # ═══ 同步坚果云 ═══
+      - name: sync
         continue-on-error: true
         env:
           RCLONE_CONFIG_JIANGUOYUN_TYPE: webdav
@@ -65,16 +57,21 @@ jobs:
           which rclone >/dev/null 2>&1 || (curl -s https://rclone.org/install.sh | sudo bash)
           export RCLONE_CONFIG_JIANGUOYUN_PASS=$(rclone obscure "$RCLONE_PLAIN_PASS")
           rclone copy "data/" "jianguoyun:notebook/学/AI简报/" --progress
-          echo "  ✓ rclone: data/ → jianguoyun:notebook/学/AI简报/"
 
-      # ═══ 第四步：邮件通知 ═══
-      - name: notify · notify/email
-        id: notify
-        continue-on-error: true
+      # ═══ 上传 artifact ═══
+      - name: probe-and-upload
+        id: probe
         run: |
-          pip install -q -r requirements.txt 2>/dev/null || true
-          for i in 1 2 3; do
-            python3 scripts/send.py && break
-            echo "[lwf] 发信失败 (attempt $i), 等待 10s 后重试..." >&2
-            sleep 10
+          FOUND=false
+          for f in data/*.json; do
+            [ -f "$f" ] && [ -s "$f" ] && FOUND=true && break
           done
+          echo "has_output=$FOUND" >> $GITHUB_OUTPUT
+          echo "  有数据 = $FOUND"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.probe.outputs.has_output == 'true'
+        with:
+          name: ai-brief-${{ github.run_id }}
+          path: data/
+          retention-days: 3
