@@ -32,4 +32,4 @@ steps:
       user_secret: "RCLONE_USER"
       pass_secret: "RCLONE_PASS"
       source: "data/"
-      target: "notebook/学/AI简报/"
+      target: "notebook/学/AI/AI简报/"

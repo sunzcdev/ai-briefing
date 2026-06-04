@@ -59,7 +59,7 @@ jobs:
         run: |
           which rclone >/dev/null 2>&1 || (curl -s https://rclone.org/install.sh | sudo bash)
           export RCLONE_CONFIG_JIANGUOYUN_PASS=$(rclone obscure "$RCLONE_PLAIN_PASS")
-          rclone copy "data/" "jianguoyun:notebook/学/AI简报/" --progress
+          rclone copy data/ jianguoyun:notebook/学/AI/AI简报/
 
       # ═══ 上传 artifact ═══
       - name: probe-and-upload
