@@ -105,6 +105,38 @@ def _is_news_url(url):
     return not url.startswith('https://github.com/')
 
 
+def _is_curated_list_article(url, title):
+    """判断文章 URL 是否可能是精选列表类（值得 extract 挖项目）"""
+    title_lower = (title or '').lower()
+    url_lower = url.lower()
+    indicators = ['top', 'best', 'curated', 'trending', 'awesome', 'must-have',
+                  'most starred', 'popular', 'notable', 'breakout']
+    return (any(kw in title_lower or kw in url_lower for kw in indicators)
+            and 'github' in url_lower
+            and _is_news_url(url))
+
+
+def _anysearch_extract(url):
+    """用 anysearch extract 获取页面内容"""
+    payload = {
+        'jsonrpc': '2.0', 'method': 'tools/call',
+        'params': {'name': 'extract', 'arguments': {'url': url}},
+        'id': 1
+    }
+    body = json.dumps(payload).encode()
+    headers = {'Content-Type': 'application/json'}
+    if _ANYSEARCH_KEY:
+        headers['Authorization'] = f'Bearer {_ANYSEARCH_KEY}'
+    try:
+        req = URLRequest(_ANYSEARCH_URL, data=body, headers=headers, method='POST')
+        with urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode())
+        return data.get('result', {}).get('content', [{}])[0].get('text', '')
+    except Exception as e:
+        print(f'[warn] Extract failed ({url[:60]}): {e}', file=sys.stderr)
+        return ''
+
+
 # ══════════════════════════════════════════════════════════════════
 # GitHub API 补详情
 # ══════════════════════════════════════════════════════════════════
@@ -259,10 +291,35 @@ def collect_projects(mode):
                 time.sleep(0.3)
         # 新闻类结果留给 collect_news 处理
     
-    # Phase 3: 补一些精选文章里的项目（通过 anysearch extract 拉精选列表内容）
-    # 当前 MVP 只处理直接搜到的 GitHub URL，不做文章内提取
+    # Phase 3: 从精选列表文章 extract 挖更多项目
+    curated_articles = []
+    for item in raw_items:
+        if _is_curated_list_article(item['url'], item['title']):
+            curated_articles.append(item)
     
-    print(f'[collector] AnySearch: {len(raw_items)} raw → {len(projects)} projects', flush=True)
+    # 取前 2 篇做 extract（避免太多调用）
+    for article in curated_articles[:2]:
+        article_text = _anysearch_extract(article['url'])
+        if not article_text:
+            continue
+        # 从文章全文提取 GitHub URL
+        for match in re.finditer(
+            r'https?://github\.com/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)',
+            article_text
+        ):
+            owner, repo = match.group(1), match.group(2)
+            if owner in ('', 'apps', 'topics', 'trending', 'explore', 'sponsors'):
+                continue
+            repo_key = f"{owner}/{repo}"
+            if repo_key not in seen_repos:
+                seen_repos.add(repo_key)
+                info = _github_repo_info(owner, repo)
+                if info:
+                    projects.append(info)
+                time.sleep(0.3)
+        time.sleep(0.5)
+    
+    print(f'[collector] AnySearch: {len(raw_items)} raw + {len(curated_articles)} extracts → {len(projects)} projects', flush=True)
     return projects
 
 
