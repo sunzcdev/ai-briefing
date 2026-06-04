@@ -23,6 +23,8 @@ env:
   LLM_KEY: ${{ secrets.LLM_KEY }}
   ANYSEARCH_API_KEY: ${{ secrets.ANYSEARCH_API_KEY }}
   AI_BRIEFING_DATA: ${{ github.workspace }}/data
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: '465'
 
 jobs:
   run:
