@@ -14,6 +14,7 @@ from src.collector.ai_briefing_collector import collect_projects, collect_news, 
 from src.curator import curate
 from src.storage.ai_briefing_storage import cmd_save
 from src.digest.send_ai_briefing import send
+from src.digest.render_md import render_md
 from src.config import DATA_DIR, EMAIL_PASS
 
 
@@ -226,6 +227,12 @@ def main():
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html)
     print(f'[ai-briefing] HTML: {html_path}', flush=True)
+
+    # 5b. 生成 Markdown（供 Obsidian 同步）
+    try:
+        render_md(selected_projects, selected_news, curated, mode, DATA_DIR)
+    except Exception as e:
+        print(f'[ai-briefing] MD render skip: {e}', flush=True)
 
     # 6. 存储
     pool = build_pool(selected_projects, selected_news)

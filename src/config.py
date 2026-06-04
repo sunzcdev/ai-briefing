@@ -44,3 +44,7 @@ CURATOR_MODEL = os.environ.get('CURATOR_MODEL', 'gpt-4o-mini')
 SKIP_INTERNALIZATION = os.environ.get(
     'AI_BRIEFING_SKIP_INTERNALIZATION', ''
 ).lower() in ('1', 'true', 'yes')
+
+# ── AnySearch ──────────────────────────────────
+ANYSEARCH_API_KEY = os.environ.get('ANYSEARCH_API_KEY', '')
+ANYSEARCH_ENDPOINT = 'https://api.anysearch.com/mcp'
