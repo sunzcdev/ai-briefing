@@ -19,8 +19,8 @@ permissions:
 env:
   EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
   EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-  EMAIL_TO: james.sun@qq.com
-  AI_BRIEFING_TO: james.sun@qq.com
+  EMAIL_TO: ${{ secrets.EMAIL_TO }}
+  AI_BRIEFING_TO: ${{ secrets.EMAIL_TO }}
   LLM_KEY: ${{ secrets.LLM_KEY }}
   ANYSEARCH_API_KEY: ${{ secrets.ANYSEARCH_API_KEY }}
   AI_BRIEFING_DATA: ${{ github.workspace }}/data
