@@ -32,23 +32,17 @@ jobs:
 
       - run: mkdir -p data
 
-      # ═══ 第一步：检测模式 ═══
-      - name: detect · detect/script
-        id: detect
-        run: |
-          bash scripts/detect-mode.sh
-
-      # ═══ 第二步：采集 ═══
+      # ═══ 第一步：采集 ═══
       - name: collect · collect/script
         id: collect
         env:
-          MODE: ${{ steps.detect.outputs.mode }}
+          MODE: ${{ inputs.mode || 'daily' }}
           ANYSEARCH_API_KEY: ${{ secrets.ANYSEARCH_API_KEY }}
         run: |
           pip install -q -r requirements.txt 2>/dev/null || true
           python3 scripts/collect.py "$MODE"
 
-      # ═══ 第三步：LLM 精选 ═══
+      # ═══ 第二步：LLM 精选 ═══
       - name: digest · process/script
         id: digest
         env:
@@ -57,7 +51,7 @@ jobs:
           pip install -q -r requirements.txt 2>/dev/null || true
           python3 scripts/digest.py
 
-      # ═══ 第四步：同步坚果云 ═══
+      # ═══ 第三步：同步坚果云 ═══
       - name: sync · store/rclone
         id: sync
         continue-on-error: true
@@ -73,7 +67,7 @@ jobs:
           rclone copy "data/" "jianguoyun:notebook/学/AI简报/" --progress
           echo "  ✓ rclone: data/ → jianguoyun:notebook/学/AI简报/"
 
-      # ═══ 第五步：邮件通知 ═══
+      # ═══ 第四步：邮件通知 ═══
       - name: notify · notify/email
         id: notify
         continue-on-error: true
